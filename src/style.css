@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+/* Custom styles can be added below */
+body {
+  min-height: 100vh;
+}
