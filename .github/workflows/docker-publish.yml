@@ -68,9 +68,10 @@ jobs:
           username: ${{ env.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            docker pull ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
             docker stop login-app || true
             docker rm login-app || true
+            docker rmi ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }} || true
+            docker pull ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
             docker run -d --name login-app -p 8080:80 ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
 
       # ========================
