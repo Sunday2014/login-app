@@ -1,4 +1,4 @@
-name: Docker Build and Push
+name: Docker Build, Push and Deploy (Secure SSH)
 
 on:
   push:
@@ -9,35 +9,73 @@ on:
 env:
   DOCKER_HUB_REPO: ${{ vars.DOCKER_HUB_REPO }}
   IMAGE_TAG: latest
+  REMOTE_SERVER: ${{ vars.REMOTE_SERVER }}
+  REMOTE_USER: ${{ vars.REMOTE_USER }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+    if: github.ref == 'refs/heads/main'
 
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ========================
+      # 设置 SSH 环境并动态获取 known_hosts
+      # ========================
+      - name: Setup SSH environment
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}   # 🔑 显式注入 secret 到环境变量
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          # 动态获取远程服务器 Host Key 并写入 known_hosts
+          ssh-keyscan -t ecdsa ${REMOTE_SERVER} >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+          # 写入 SSH 私钥并设置权限
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      # ========================
+      # 登录 Docker Hub
+      # ========================
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_TOKEN }}
 
-      - name: Build and push
+      # ========================
+      # 构建并推送镜像
+      # ========================
+      - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          push: ${{ github.ref == 'refs/heads/main' }}
+          push: true
           tags: ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
 
+      # ========================
+      # 通过 SSH 部署到远程服务器
+      # ========================
       - name: Deploy to remote server
-        if: ${{ github.ref == 'refs/heads/main' }}
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ vars.REMOTE_SERVER }}
-          username: ${{ vars.REMOTE_USER }}
+          host: ${{ env.REMOTE_SERVER }}
+          username: ${{ env.REMOTE_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             docker pull ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
-            docker stop my-app || true
-            docker rm my-app || true
-            docker run -d --name my-app -p 80:80 ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
+            docker stop login-app || true
+            docker rm login-app || true
+            docker run -d --name my-app -p 8080:80 ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
+
+      # ========================
+      # 清理敏感文件（可选）
+      # ========================
+      - name: Cleanup SSH files
+        run: |
+          rm -rf ~/.ssh
