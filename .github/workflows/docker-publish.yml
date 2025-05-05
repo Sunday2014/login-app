@@ -9,7 +9,7 @@ on:
 
 env:
   DOCKER_HUB_REPO: ${{ vars.DOCKER_HUB_REPO }}
-  IMAGE_TAG: latest
+  IMAGE_TAG: ${{ github.sha }}  # 改用 Git Commit SHA 作为 Tag（避免覆盖风险）
   REMOTE_SERVER: ${{ vars.REMOTE_SERVER }}
   REMOTE_USER: ${{ vars.REMOTE_USER }}
 
@@ -71,8 +71,7 @@ jobs:
           script: |
             docker stop login-app || true
             docker rm login-app || true
-            docker rmi ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }} || true
-            docker pull --no-cache ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
+            docker pull ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
             docker run -d --name login-app -p 8080:80 ${{ env.DOCKER_HUB_REPO }}:${{ env.IMAGE_TAG }}
 
       # ========================
